@@ -1,6 +1,6 @@
 import argparse
 import asyncio
-import datetime
+from datetime import datetime, timezone
 import getpass
 from icepool import icepool
 import logging
@@ -10,14 +10,14 @@ import sys
 import time
 import toml
 
-from shapool import shapool
-from shapool import stratum
+from . import shapool
+from . import stratum
 
 _log = logging.getLogger('shapool-client.main')
 
 def _heartbeat_forever():
     while True:
-        _log.info(f'🕰  {datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).isoformat()}')
+        _log.info(f'🕙 {datetime.now(timezone.utc).astimezone()}')
         time.sleep(5*60)
 
 async def _run_shapool_forever(shapool_, worker_name, recv_queue, send_queue, timeout_s):
@@ -45,7 +45,7 @@ async def _run_shapool_forever(shapool_, worker_name, recv_queue, send_queue, ti
                     await send_queue.put(
                         ('mining.submit', [worker_name, job_id, extra_nonce_2, timestamp, nonce],))
                 else:
-                    _log.error(f'🤷‍ [{worker_name}] READY without result...')
+                    _log.warning(f'🤷‍ [{worker_name}] READY without result...')
             else:
                 _log.info(f'🛑 [{worker_name}] Timed out...')
 
@@ -53,8 +53,13 @@ async def _run_shapool_forever(shapool_, worker_name, recv_queue, send_queue, ti
 
         elif method == 'set_difficulty':
             difficulty, = params
-            _log.info(f'🤹‍ [{worker_name}] Setting difficulty... {difficulty=}')
+            _log.info(f'🤹‍ [{worker_name}] Would set difficulty, but not implemented... {difficulty=}')
             # TODO implement setting difficulty
+            # Base difficulty = 1 = 32 zeroes
+            #                   2 = 33 zeroes
+            #                   4 = 34 zeroes
+            #                   8 = 35 zeroes
+            # ... zeroes = floor(log2(difficulty)) + 32
         else:
             _log.warning(f'🤷‍ [{worker_name}] Received unknown message type: {method=}({params=!r})')
 
@@ -108,7 +113,7 @@ async def main(args, config):
     await stratum_.connect()
     await stratum_.subscribe(USER_AGENT)
     await stratum_.authorize(worker_name, worker_password)
-    await stratum_.suggest_difficulty(128)
+    #await stratum_.suggest_difficulty(128)
 
     # Initialize icepool/shapool
     ctx = icepool.IcepoolContext()
@@ -134,7 +139,7 @@ if __name__ == '__main__':
 
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='A stratum (v1) mining client that interfaces with icepool. (https://github.com/jkiv/)')
-    parser.add_argument('-v', '--verbose', default=False, help='Output more detailed logging info.', action='store_true')
+    parser.add_argument('-v', '--verbose', default=0, help='Output more detailed logging info.', action='count')
     parser.add_argument('-c', '--config', default='~/.shapool/config.toml', help='Path to client configuration TOML file. default: ~/.shapool/config.toml')
     parser.add_argument('-n', '--name', help='Section name in config file to use for worker. default: (first)')
     parser.add_argument('-p', '--password', default=False, help='Prompt for password, if not supplied in configuration. default: False', action='store_true')
@@ -153,9 +158,9 @@ if __name__ == '__main__':
     worker_config = config[config_name]
 
     # Handle --verbose
-    if args.verbose:
+    if args.verbose >= 2:
         logging.basicConfig(level=logging.DEBUG)
-    else:
+    elif args.verbose == 1:
         logging.basicConfig(level=logging.INFO)
 
     # Handle password options, if required 
@@ -173,8 +178,8 @@ if __name__ == '__main__':
     if 'interrupt_work' not in worker_config:
         worker_config['interrupt_work'] = True
 
-    # TODO proper validation of config
+    # TODO proper validation of config (schema)
 
     _log.info(f'Using worker configuration \'{config_name}\' from \'{args.config}\'...')
 
-    asyncio.run(main(args, worker_config), debug=args.verbose)
+    asyncio.run(main(args, worker_config), debug=(args.verbose == 2))

@@ -6,7 +6,7 @@ import json
 import os
 import sys
 
-from shapool import shapool
+from . import shapool
 
 _log = logging.getLogger('shapool-client.stratum')
 

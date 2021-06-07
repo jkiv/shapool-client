@@ -5,7 +5,7 @@ import math
 import struct
 import time
 
-from shapool import midstate
+from . import midstate
 
 _log = logging.getLogger('shapool-client.shapool')
 
@@ -19,6 +19,9 @@ class Shapool:
 
         nonce_step = 0x100 // self.number_of_devices
         self.device_configs = bytes([i * nonce_step for i in range(self.number_of_devices)])
+
+    def __del__(self):
+        self._ctx.assert_reset()
 
     def start_execution(self):
         self._ctx.deassert_reset()
