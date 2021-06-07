@@ -65,9 +65,9 @@ A different section can be used at run-time using the command-line argument `-n`
 $ python3 -m shapool --name shapool-example2
 ```
 
-### Support
+### Donate
 
 Please consider supporting this project and others like it by donating:
 
 * ☕: [ko-fi.com/jkiv_](https://ko-fi.com/jkiv_)
-* ₿: 13zRrs1YDdooUN5WtfXRSDn8KnJdok4qG9
+* ₿: `13zRrs1YDdooUN5WtfXRSDn8KnJdok4qG9`
