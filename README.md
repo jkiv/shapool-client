@@ -22,9 +22,8 @@ optional arguments:
 
 ### ... via PyPI
 
-```bash
-# TODO pip install shapool
-```
+> TODO `pip install shapool`
+
 
 ### ... from source:
 
