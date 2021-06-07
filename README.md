@@ -18,15 +18,15 @@ optional arguments:
   -p, --password        Prompt for password, if not supplied in configuration. default: False
 ```
 
-### Installation
+## Installation
 
-#### ... via PyPI
+### ... via PyPI
 
 ```bash
 # TODO pip install shapool
 ```
 
-#### ... from source:
+### ... from source:
 
 Building requires `make` and `gcc`.
 
@@ -35,7 +35,7 @@ $ make dist
 $ pip install dist/shapool.*.tar.gz 
 ```
 
-### Configuration
+## Configuration
 
 `shapool` uses a [TOML](https://github.com/toml-lang/toml) file for configuration.
 
@@ -65,7 +65,7 @@ A different section can be used at run-time using the command-line argument `-n`
 $ python3 -m shapool --name shapool-example2
 ```
 
-### Donate
+## Donate
 
 Please consider supporting this project and others like it by donating:
 
