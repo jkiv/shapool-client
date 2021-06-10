@@ -17,7 +17,7 @@ class Shapool:
         self.number_of_devices = number_of_devices
         self.hardcoded_bits = math.ceil(math.log2(cores_per_device))
 
-        nonce_step = 0x100 // self.number_of_devices
+        nonce_step = (0x100 >> self.hardcoded_bits) // self.number_of_devices
         self.device_configs = bytes([i * nonce_step for i in range(self.number_of_devices)])
 
     def __del__(self):
@@ -109,8 +109,10 @@ class Shapool:
             0x80: 0x0000_0007
         }
 
+        print(f'{flags=:02x} {hardcoded_bits=} {nonce=:08x} {mapping[flags]<<(32-hardcoded_bits)=:08x} {device_offset<<24=:08x}')
+
         nonce -= 2
         nonce |= mapping[flags] << (32-hardcoded_bits)
-        nonce ^= device_offset << (32-hardcoded_bits-8)
+        nonce ^= device_offset << 24
 
         return nonce

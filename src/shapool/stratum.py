@@ -74,7 +74,7 @@ class StratumClient:
         return json.loads(message.strip())
 
     def _handle_error(self, error, full_message):
-        _log.error(f'🤦‍ Stratum Error ({error[0]}): {error[1]}')
+        _log.error(f'🤦‍ Stratum Error ({error[0]}): {error[1]} - {error[2]}')
         # 20 - Other/Unknown
         # 21 - Job not found(=stale)
         # 22 - Duplicate share
@@ -96,7 +96,7 @@ class StratumClient:
         merkle_branch = [binascii.a2b_hex(h) for h in params[4]]
         version = binascii.a2b_hex(params[5])
         bits = binascii.a2b_hex(params[6])
-        timestamp = params[7] # keep as ascii for calling mining.submit 
+        timestamp = binascii.a2b_hex(params[7])
         clean_jobs = params[8]
 
         # Handle "clean_jobs"
@@ -131,13 +131,13 @@ class StratumClient:
 
         # Generate first_block, second_block
         first_block, second_block = shapool.Shapool._pack_job(\
-            version, previous_hash, merkle_root, binascii.a2b_hex(timestamp), bits)
+            version, previous_hash, merkle_root, timestamp, bits)
 
         # Generate midstate
         midstate_ = shapool.Shapool._precompute_midstate(first_block)
 
         # Push job
-        extra_nonce_2 = binascii.b2a_hex(extra_nonce_2).decode('utf-8')
+        extra_nonce_2 = extra_nonce_2
         job = ('job', (job_id, extra_nonce_2, timestamp, midstate_, second_block,),)
         await recv_queue.put(job)
 

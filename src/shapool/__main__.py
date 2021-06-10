@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import binascii
 from datetime import datetime, timezone
 import getpass
 from icepool import icepool
@@ -21,8 +22,10 @@ def _heartbeat_forever():
         time.sleep(5*60)
 
 async def _run_shapool_forever(shapool_, worker_name, recv_queue, send_queue, timeout_s):
+    current_difficulty = 1
+
     while True:
-        _log.info(f'🪑 [{worker_name}] Waiting for work...')
+        _log.info(f'🪑 [{worker_name}] Waiting for work... {current_difficulty=}')
 
         method, params, = await recv_queue.get()
 
@@ -34,6 +37,9 @@ async def _run_shapool_forever(shapool_, worker_name, recv_queue, send_queue, ti
             shapool_.update_job(midstate_, second_block)
             shapool_.start_execution()  # start executing...
 
+            extra_nonce_2 = binascii.b2a_hex(extra_nonce_2).decode('utf-8')
+            timestamp = binascii.b2a_hex(timestamp).decode('utf-8')
+
             loop = asyncio.get_running_loop()
             ready = await loop.run_in_executor(None, shapool_.poll_until_ready_or_timeout, timeout_s)
 
@@ -41,19 +47,20 @@ async def _run_shapool_forever(shapool_, worker_name, recv_queue, send_queue, ti
                 nonce = shapool_.get_result()
                 # TODO verify nonce meets difficulty
                 if nonce:
-                    _log.info(f'🍾 [{worker_name}] Success! ({job_id=})')
+                    nonce = f'{nonce:08x}'
+                    _log.info(f'🍾 [{worker_name}] Success! ({job_id=}): {nonce=}')
                     await send_queue.put(
                         ('mining.submit', [worker_name, job_id, extra_nonce_2, timestamp, nonce],))
                 else:
-                    _log.warning(f'🤷‍ [{worker_name}] READY without result...')
+                    _log.warning(f'🤷‍ [{worker_name}] READY without result... {nonce=}')
             else:
                 _log.info(f'🛑 [{worker_name}] Timed out...')
 
             shapool_.reset()
 
         elif method == 'set_difficulty':
-            difficulty, = params
-            _log.info(f'🤹‍ [{worker_name}] Would set difficulty, but not implemented... {difficulty=}')
+            current_difficulty, = params
+            _log.info(f'🤹‍ [{worker_name}] Would set difficulty, but not implemented... {current_difficulty=}')
             # TODO implement setting difficulty
             # Base difficulty = 1 = 32 zeroes
             #                   2 = 33 zeroes
@@ -127,13 +134,22 @@ async def main(args, config):
     loop = asyncio.get_running_loop()
     heartbeat_task = loop.run_in_executor(None, _heartbeat_forever)
 
-    # Make rocket go now!
-    await asyncio.gather(
+    async_tasks = [
         heartbeat_task,
         _recv_forever(stratum_, shapool_, recv_queue, interrupt_work),
         _send_forever(stratum_, send_queue),
         _run_shapool_forever(shapool_, worker_name, recv_queue, send_queue, timeout)
-    )
+    ]
+
+    # Make rocket go now!
+    try:
+        await asyncio.gather(*async_tasks)
+    except Exception as e:
+        _log.error(f'💣 Fatal error: {e!r}')
+        for t in async_tasks:
+            t.cancel()
+    finally:
+        _log.info(f'Done.')
 
 if __name__ == '__main__':
 
