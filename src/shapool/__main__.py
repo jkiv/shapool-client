@@ -16,15 +16,21 @@ from . import stratum
 
 _log = logging.getLogger('shapool-client.main')
 
-def _heartbeat_forever():
-    while True:
+async def _heartbeat_forever(sleep_time_s = 5*60):
+
+    loop = asyncio.get_running_loop()
+
+    while loop.is_running():
         _log.info(f'🕙 {datetime.now(timezone.utc).astimezone()}')
-        time.sleep(5*60)
+        await asyncio.sleep(sleep_time_s)
 
 async def _run_shapool_forever(shapool_, worker_name, recv_queue, send_queue, timeout_s):
+
+    loop = asyncio.get_running_loop()
+
     current_difficulty = 1
 
-    while True:
+    while loop.is_running():
         _log.info(f'🪑 [{worker_name}] Waiting for work... {current_difficulty=}')
 
         method, params, = await recv_queue.get()
@@ -40,7 +46,6 @@ async def _run_shapool_forever(shapool_, worker_name, recv_queue, send_queue, ti
             extra_nonce_2 = binascii.b2a_hex(extra_nonce_2).decode('utf-8')
             timestamp = binascii.b2a_hex(timestamp).decode('utf-8')
 
-            loop = asyncio.get_running_loop()
             ready = await loop.run_in_executor(None, shapool_.poll_until_ready_or_timeout, timeout_s)
 
             if ready:
@@ -54,7 +59,7 @@ async def _run_shapool_forever(shapool_, worker_name, recv_queue, send_queue, ti
                 else:
                     _log.warning(f'🤷‍ [{worker_name}] READY without result... {nonce=}')
             else:
-                _log.info(f'🛑 [{worker_name}] Timed out...')
+                _log.info(f'⏳ [{worker_name}] Timed out...')
 
             shapool_.reset()
 
@@ -71,7 +76,10 @@ async def _run_shapool_forever(shapool_, worker_name, recv_queue, send_queue, ti
             _log.warning(f'🤷‍ [{worker_name}] Received unknown message type: {method=}({params=!r})')
 
 async def _recv_forever(stratum_, shapool_, recv_queue, interrupt_work):
-    while True:
+
+    loop = asyncio.get_running_loop()
+
+    while loop.is_running():
         msg = await stratum_._recv()
 
         if 'result' in msg:
@@ -96,7 +104,10 @@ async def _recv_forever(stratum_, shapool_, recv_queue, interrupt_work):
                     f'🤷‍ Received unknown message type from server: {method=}')
 
 async def _send_forever(stratum_, send_queue):
-    while True:
+
+    loop = asyncio.get_running_loop()
+
+    while loop.is_running():
         method, params = await send_queue.get()
         _log.debug(f'📤 Sending call to server: {method=} {params=}')
         await stratum_.call(method, params)
@@ -120,36 +131,32 @@ async def main(args, config):
     await stratum_.connect()
     await stratum_.subscribe(USER_AGENT)
     await stratum_.authorize(worker_name, worker_password)
-    #await stratum_.suggest_difficulty(128)
+    await stratum_.suggest_difficulty(128)
 
     # Initialize icepool/shapool
     ctx = icepool.IcepoolContext()
     shapool_ = shapool.Shapool(ctx, number_of_devices, cores_per_device)
     shapool_.update_device_configs()
 
+    # Initialize shared queues
     recv_queue = asyncio.Queue()
     send_queue = asyncio.Queue()
 
     # Convert blocking function into async task
     loop = asyncio.get_running_loop()
-    heartbeat_task = loop.run_in_executor(None, _heartbeat_forever)
-
-    async_tasks = [
-        heartbeat_task,
-        _recv_forever(stratum_, shapool_, recv_queue, interrupt_work),
-        _send_forever(stratum_, send_queue),
-        _run_shapool_forever(shapool_, worker_name, recv_queue, send_queue, timeout)
-    ]
 
     # Make rocket go now!
     try:
-        await asyncio.gather(*async_tasks)
+        await asyncio.gather(
+            _heartbeat_forever(),
+            _recv_forever(stratum_, shapool_, recv_queue, interrupt_work),
+            _send_forever(stratum_, send_queue),
+            _run_shapool_forever(shapool_, worker_name, recv_queue, send_queue, timeout)
+        )
     except Exception as e:
         _log.error(f'💣 Fatal error: {e!r}')
-        for t in async_tasks:
-            t.cancel()
-    finally:
-        _log.info(f'Done.')
+        _log.error(f'🚪 Quitting...')
+        loop.stop()
 
 if __name__ == '__main__':
 

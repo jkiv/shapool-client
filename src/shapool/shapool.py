@@ -13,7 +13,6 @@ class Shapool:
     def __init__(self, ctx: icepool.IcepoolContext, number_of_devices: int, cores_per_device: int):
         self._ctx = ctx
 
-        # Number of devices on IcepoolContext
         self.number_of_devices = number_of_devices
         self.hardcoded_bits = math.ceil(math.log2(cores_per_device))
 
